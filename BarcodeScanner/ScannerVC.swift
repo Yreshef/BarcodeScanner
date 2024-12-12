@@ -8,9 +8,22 @@
 import UIKit
 import AVFoundation
 
-enum CameraError {
-    case invalidDeviceInput
-    case invalidScannedValue
+enum CameraError: Error, CustomStringConvertible {
+    case captureDeviceUnavailable
+    case inputInitializationFailed(error: Error)
+    case inputAdditionFailed
+    case metataDataOutputAdditionFailed
+    case previewLayerInitializationFailed
+    
+    var description: String {
+        switch self {
+        case .captureDeviceUnavailable: return "Something is wrong with the camera. We are unable to capture the input."
+        case .inputInitializationFailed(let error): return "Failed to initialize video input: \(error.localizedDescription)"
+        case .inputAdditionFailed: return "Failed to add video input to capture session."
+        case .metataDataOutputAdditionFailed: return "Failed to add metadata output to capture session."
+        case .previewLayerInitializationFailed: return "Failed to initialize preview layer."
+        }
+    }
 }
 
 protocol ScannerVCDelegate: AnyObject {
@@ -33,6 +46,7 @@ final class ScannerVC: UIViewController {
     
     private func setupCaptureSession() {
         guard let videoCaptureDevice = configureCaptureDevice() else {
+            scannerDelegate?.didSurface(error: .captureDeviceUnavailable)
             return
         }
         
@@ -41,10 +55,12 @@ final class ScannerVC: UIViewController {
         }
         
         guard addInputToSession(videoInput) else {
+            scannerDelegate?.didSurface(error: .inputAdditionFailed)
             return
         }
         
         guard addMetadataOutputToSession() else {
+            scannerDelegate?.didSurface(error: .metataDataOutputAdditionFailed)
             return
         }
         
@@ -60,6 +76,7 @@ final class ScannerVC: UIViewController {
         do {
             return try AVCaptureDeviceInput(device: device)
         } catch {
+            scannerDelegate?.didSurface(error: .inputInitializationFailed(error: error))
             return nil
         }
     }
@@ -89,6 +106,8 @@ final class ScannerVC: UIViewController {
         previewLayer?.videoGravity = .resizeAspectFill
         if let previewLayer {
             view.layer.addSublayer(previewLayer)
+        } else {
+            scannerDelegate?.didSurface(error: .previewLayerInitializationFailed)
         }
     }
     //TODO: Remove
