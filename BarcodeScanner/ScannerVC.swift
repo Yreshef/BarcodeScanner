@@ -15,6 +15,10 @@ enum CameraError: Error, CustomStringConvertible {
     case metataDataOutputAdditionFailed
     case previewLayerInitializationFailed
     
+    case noMetadataDetected
+    case metadataNotMachineReadable
+    case barcodeExtractionFailed
+    
     var description: String {
         switch self {
         case .captureDeviceUnavailable: return "Something is wrong with the camera. We are unable to capture the input."
@@ -22,6 +26,10 @@ enum CameraError: Error, CustomStringConvertible {
         case .inputAdditionFailed: return "Failed to add video input to capture session."
         case .metataDataOutputAdditionFailed: return "Failed to add metadata output to capture session."
         case .previewLayerInitializationFailed: return "Failed to initialize preview layer."
+            
+        case .noMetadataDetected: return "No metadata objects were detected."
+        case .metadataNotMachineReadable: return "The metadata object is not machine-readable."
+        case .barcodeExtractionFailed: return "Failed to extract barcode value from metadata object."
         }
     }
 }
@@ -40,6 +48,22 @@ final class ScannerVC: UIViewController {
     init(scannerDelegate: ScannerVCDelegate) {
         super.init(nibName: nil, bundle: nil)
         self.scannerDelegate = scannerDelegate
+    }
+    
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        setupCaptureSession()
+    }
+    
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        
+        guard let previewLayer else {
+            scannerDelegate?.didSurface(error: .previewLayerInitializationFailed)
+            return
+        }
+        
+        previewLayer.frame = view.layer.bounds
     }
     
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -110,52 +134,26 @@ final class ScannerVC: UIViewController {
             scannerDelegate?.didSurface(error: .previewLayerInitializationFailed)
         }
     }
-    //TODO: Remove
-    //    private func setupCatpureSession() {
-    //        guard let videoCaptureDevice = AVCaptureDevice.default(for: .video) else {
-    //            return
-    //        }
-    //
-    //        let videoInput: AVCaptureDeviceInput
-    //
-    //        do {
-    //            try videoInput = AVCaptureDeviceInput(device: videoCaptureDevice)
-    //        } catch {
-    //            return
-    //        }
-    //
-    //        if captureSession.canAddInput(videoInput) {
-    //            captureSession.addInput(videoInput)
-    //        } else {
-    //            return
-    //        }
-    //
-    //        let metadataOutput = AVCaptureMetadataOutput()
-    //
-    //        if captureSession.canAddOutput(metadataOutput) {
-    //            captureSession.addOutput(metadataOutput)
-    //            metadataOutput.setMetadataObjectsDelegate(self, queue: DispatchQueue.main)
-    //            metadataOutput.metadataObjectTypes = [.ean8, .ean13]
-    //        } else {
-    //            return
-    //        }
-    //
-    //        previewLayer = AVCaptureVideoPreviewLayer(session: captureSession)
-    //        previewLayer?.videoGravity = .resizeAspectFill
-    //        view.layer.addSublayer(previewLayer!) //TODO: safe unwrap
-    //
-    //        captureSession.startRunning()
-    //    }
 }
 
 extension ScannerVC: AVCaptureMetadataOutputObjectsDelegate {
     
     func metadataOutput(_ output: AVCaptureMetadataOutput, didOutput metadataObjects: [AVMetadataObject], from connection: AVCaptureConnection) {
         
-        guard let object = metadataObjects.first else { return }
-        guard let machineReadableObject = object as? AVMetadataMachineReadableCodeObject else { return }
-        guard let barcode = machineReadableObject.stringValue else { return }
+        guard let object = metadataObjects.first else {
+            scannerDelegate?.didSurface(error: .noMetadataDetected)
+            return
+        }
+        guard let machineReadableObject = object as? AVMetadataMachineReadableCodeObject else {
+            scannerDelegate?.didSurface(error: .metadataNotMachineReadable)
+            return
+        }
+        guard let barcode = machineReadableObject.stringValue else {
+            scannerDelegate?.didSurface(error: .barcodeExtractionFailed)
+            return
+        }
         
+        captureSession.stopRunning()
         scannerDelegate?.didFind(barcode: barcode)
     }
 }
