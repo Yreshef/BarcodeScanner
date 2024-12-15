@@ -36,11 +36,14 @@ struct ScannerView: UIViewControllerRepresentable {
         }
         
         func didSurface(error: CameraError) {
-            switch error {
-            case .captureDeviceUnavailable: scannerView.alertItem = AlertContext.captureDeviceUnavailable
-            case .barcodeExtractionFailed: scannerView.alertItem = AlertContext.barcodeExtractionFailed
-            default: print(error.description)
+            DispatchQueue.main.async {
+                switch error {
+                case .captureDeviceUnavailable: self.scannerView.alertItem = AlertContext.captureDeviceUnavailable
+                case .barcodeExtractionFailed: self.scannerView.alertItem = AlertContext.barcodeExtractionFailed
+                default: print(error.description)
+                }
             }
+            
         }
     }
 }
